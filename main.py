@@ -2,66 +2,73 @@ import psutil
 import os
 from datetime import datetime
 
-HEADER_HEIGHT = 2
-
-def get_pid_info(pid):
+def get_pid_info(pid: int) -> list[str]:
     if not psutil.pid_exists(pid):
         print("PID '%d' does not exists" % pid)
-        return
+        return ["-1", "None", "0.00", "0.00", "0", "0000-00-00 00:00:00", "None"]
 
     process = psutil.Process(pid)
 
-    info = { "pid": pid }
-    info["name"] = process.name()
-    info["mem"] = process.memory_percent()
-    info["cpu"] = process.cpu_percent()
-    info["threads"] = process.num_threads()
-    info["creation_time"] = int(process.create_time())
-    info["owner"] = process.username()
-
-    return info
-
-def get_process_list():
-    pids = psutil.pids()
-    process_list = []
-
-    for pid in pids:
-        process_list.append(get_pid_info(pid))
-
-    return process_list
-
-def filter_by_name(process_list, query):
-    return [p
-            for p in process_list
-            if query in p["name"]]
-
-def filter_by_mem(process_list):
-   process_list.sort(key=lambda x: 100 - x["mem"])
-
-def format_process(process):
-    # pid   name    mem%    cpu%    threads     yyyy-mm-dd hh:mm:ss     owner
-    creation_date = datetime.fromtimestamp(process["creation_time"])
+    creation_date = datetime.fromtimestamp(int(process.create_time()))
     formatted_date = creation_date.strftime("%Y-%m-%d %H:%M:%S")
 
-    return "%d\t%s\t%.2f%%\t%.2f%%\t%d\t%s\t%s" % (process["pid"], process["name"].split("/")[0],
-                                                   process["mem"], process["cpu"], process["threads"],
-                                                   formatted_date, process["owner"])
+    return [
+            str(pid),
+            process.name().split("/")[0],
+            str(int(process.memory_percent() * 100) / 100),
+            str(int(process.cpu_percent() * 100) / 100),
+            str(process.num_threads()),
+            formatted_date,
+            process.username()
+    ]
 
-def show_process_list():
-    terminal_size = os.get_terminal_size()
 
-    terminal_cols = terminal_size.columns
-    terminal_rows = terminal_size.lines
-    available_rows = terminal_rows - HEADER_HEIGHT
+def fit_text_int(text: str, space: int) -> str :
+    text_size = min(len(text), space)
+    return text[:text_size] + (" " * (space - text_size))
 
-    print("PID\tName\tMem%\tCPU%\tThreads\tDate\tOwner\n" + ("─" * terminal_cols))
+def print_table(table: list[list[str]], width: float, height: float):
+    cols_width = []
 
-    process_list = get_process_list()
-    filter_by_mem(process_list)
-    for i, process in enumerate(process_list):
-        if i + 1 >= available_rows: break
-        print(format_process(process))
+    for row in table:
+        for i, value in enumerate(row):
+            val_size = len(value)
+            if i >= len(cols_width): cols_width.append(val_size)
+            else: cols_width[i] = max(cols_width[i], val_size)
 
-    print("\033[{};{}H".format(0, 0), end='', flush=True) # move cursor to the start of screen
+    cols_ratio = width / sum(cols_width) 
+    is_header = True
 
-while 1: show_process_list()
+    for h, row in enumerate(table):
+        if h + 2 >= height: break
+
+        for i, value in enumerate(row):
+            text = fit_text_int(value, int(cols_width[i] * cols_ratio))
+            print(text, end="")
+        print()
+
+        if is_header:
+            print("─" * int(width - cols_width[-1]))
+            is_header = False
+
+def get_list_of_process():
+    process = []
+    for pid in psutil.pids():
+        info = get_pid_info(pid)
+        process.append(info)
+    return process
+
+def sort_process_by_mem(process_list):
+       process_list.sort(key=lambda p: 100 - float(p[2]))
+
+def print_info():
+    table = [["PID", "Name", "Mem%", "CPU%", "Threads", "Date", "Owner"]]
+
+    process_list = get_list_of_process()
+    sort_process_by_mem(process_list)
+    for process in process_list: table.append(process)
+
+    term_size = os.get_terminal_size()
+    print_table(table, term_size.columns, term_size.lines)
+
+while 1: print_info()

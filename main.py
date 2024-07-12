@@ -48,7 +48,7 @@ def print_table(table: list[list[str]], width: float, height: float):
         print()
 
         if is_header:
-            print("─" * int(width - cols_width[-1]))
+            print("─" * int(width))
             is_header = False
 
 def get_list_of_process():
@@ -70,5 +70,6 @@ def print_info():
 
     term_size = os.get_terminal_size()
     print_table(table, term_size.columns, term_size.lines)
+    print("\033[{};{}H".format(0, 0), end='', flush=True) # move cursor to the start of screen
 
 while 1: print_info()
